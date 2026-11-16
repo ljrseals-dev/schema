@@ -105,13 +105,11 @@ def _matches_type(instance: Any, expected: str) -> bool:
     if expected == "number":
         return isinstance(instance, (int, float)) and not isinstance(instance, bool)
     if expected == "integer":
-        return (
-            isinstance(instance, (int, float))
-            and not isinstance(instance, bool)
-            and math.isfinite(instance)
-            and instance.is_integer() if isinstance(instance, float)
-            else isinstance(instance, int) and not isinstance(instance, bool)
-        )
+        if isinstance(instance, bool):
+            return False
+        if isinstance(instance, int):
+            return True
+        return isinstance(instance, float) and math.isfinite(instance) and instance.is_integer()
     return isinstance(instance, python_type)
 
 
