@@ -290,3 +290,42 @@ def execute_and_validate(feature: str, payload: Any, metadata: dict[str, Any],
         ],
         "reason": None if passed else "metadata_changed_or_error_above_tolerance",
     }
+
+
+# Normalize malformed caller input at the public boundary. The lower-level
+# transform helpers remain small and strict; no raw Python TypeError/KeyError
+# should escape for an invalid external payload.
+_execute_and_validate_impl = execute_and_validate
+
+
+def execute_and_validate(feature: str, payload: Any, metadata: dict[str, Any],
+                         tolerance: float) -> dict[str, Any]:
+    """Validate the public payload contract, execute, and return metadata verbatim."""
+    if not isinstance(feature, str):
+        raise FallbackError("feature must be a string")
+    if not isinstance(payload, dict):
+        raise FallbackError("payload must be an object")
+    required = {
+        "float16": ("words", "shape"),
+        "int8": ("values", "shape", "scale"),
+        "ternary": ("packed", "values_count", "shape", "codebook"),
+    }
+    if feature not in required:
+        raise FallbackError(f"unsupported fallback feature: {feature!r}")
+    missing = [key for key in required[feature] if key not in payload]
+    if missing:
+        raise FallbackError("missing required payload field(s): " + ", ".join(missing))
+    if feature == "ternary":
+        codebook = payload.get("codebook")
+        if not isinstance(codebook, dict) or any(type(key) is not int for key in codebook):
+            raise FallbackError("ternary codebook keys must be integer symbols")
+    try:
+        result = _execute_and_validate_impl(feature, payload, metadata, tolerance)
+    except FallbackError:
+        raise
+    except (TypeError, KeyError, OverflowError) as exc:
+        raise FallbackError(f"malformed {feature} payload: {exc}") from exc
+    # This is a pass-through snapshot, not a claim that metadata was inferred
+    # from an ONNX graph. The caller must supply the complete source metadata.
+    result["preserved_metadata"] = copy.deepcopy(metadata)
+    return result
