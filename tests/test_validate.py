@@ -72,6 +72,21 @@ class ValidateTests(unittest.TestCase):
         errs = self.check(m)
         self.assertTrue(any("says 'out of scope'" in e for e in errs))
 
+    def test_primary_blocker_allows_proposed_unmeasured_class(self):
+        errs = self.check(
+            lambda d: d["scope_verdict"]["primary_blocker"].update(
+                evidence_class="proposed-unmeasured"
+            )
+        )
+        self.assertEqual(errs, [])
+
+    def test_near_term_still_requires_known_blocker_when_proposed(self):
+        def mutate(d):
+            d["scope_verdict"]["per_type"]["float16"] = "near-term-in-scope"
+            d["scope_verdict"]["primary_blocker"]["evidence_class"] = "proposed-unmeasured"
+        errs = self.check(mutate)
+        self.assertTrue(any("near-term-in-scope" in error for error in errs))
+
     def test_blocker_class_restricted(self):
         errs = self.check(lambda d: d["scope_verdict"]["primary_blocker"].update(evidence_class="requires-change"))
         self.assertTrue(any("primary_blocker" in e for e in errs))
