@@ -77,6 +77,15 @@ class QuantizedEmitterTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unsupported quantized tensors remain"):
             EMITTER.prepare_quantized_model(model)
 
+    def test_unknown_operator_is_rejected_before_codegen(self):
+        node = helper.make_node("Softmax", ["x"], ["y"], name="unsupported")
+        model_input = tensor_value_info("x", TensorProto.FLOAT, [1])
+        model_output = tensor_value_info("y", TensorProto.FLOAT, [1])
+        graph = helper.make_graph([node], "unsupported-op", [model_input], [model_output])
+        model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 13)])
+        with self.assertRaisesRegex(ValueError, "unsupported ONNX operator"):
+            EMITTER.prepare_quantized_model(model)
+
     def test_float16_graph_boundary_is_rejected(self):
         model_input = tensor_value_info("x", TensorProto.FLOAT16, [1])
         graph = helper.make_graph([], "boundary", [model_input], [])
