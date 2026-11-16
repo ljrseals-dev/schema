@@ -21,7 +21,6 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from collections import defaultdict
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -176,7 +175,7 @@ def generate_mutants(
         if (
             path
             and isinstance(value, str)
-            and node_schema.get("pattern") == r"\\S"
+            and node_schema.get("pattern") == r"\S"
         ):
             for blank in ("", "   "):
                 mutant = copy.deepcopy(fixture)
