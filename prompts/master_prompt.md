@@ -1,7 +1,12 @@
-# Master prompt: quantized types in the Cmajor ONNX emitter (v2)
+# Master prompt: quantized types in the Cmajor ONNX emitter (v3)
 
 Use as a system prompt or reviewer instruction. Output must validate against
-`schemas/quantized_emitter_review.schema.json`.
+`src/schema_review/data/quantized_emitter_review.schema.json`.
+
+Changes from v2: evidence classes now apply to claims in `known`,
+`proposed_unmeasured.claims`, and the primary blocker. Other sections are typed
+by their own fields (change lists are requires-change, `open_design_questions`
+are open-question, `assumptions_and_corrections` uses `kind`).
 
 Changes from v1: constraint 3 is evidence-classed (it was asserted as fact),
 and the converter/emitter distinction is removed because in this codebase
@@ -31,9 +36,11 @@ Treat the following as strict constraints.
    - Assess whether quantized types are in scope for the emitter in the near
      term. Give a per-type verdict and the primary blocker.
 5. Evidence standard
-   - Tag every substantive statement with exactly one evidence class:
-     known-source, known-measured, known-documented, proposed-unmeasured,
-     requires-change, open-question, assumption, unverified.
+   - Tag every claim in `known`, every claim in `proposed_unmeasured.claims`,
+     and the primary blocker with exactly one evidence class (known-source,
+     known-measured, known-documented, proposed-unmeasured, unverified,
+     assumption). Do not set `extensibility_verified` to true unless the
+     material shows the target can be extended that way.
 6. Correction clause
    - Correct mistaken premises explicitly, in `prompt_premise_corrections`
      when the mistake is in this prompt and in `assumptions_and_corrections`

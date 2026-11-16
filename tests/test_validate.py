@@ -54,6 +54,48 @@ class ValidateTests(unittest.TestCase):
         errs = self.check(m)
         self.assertTrue(any("near-term-in-scope" in e for e in errs))
 
+    def test_blank_strings_rejected(self):
+        self.assertTrue(self.check(lambda d: d.update(verification_limits=["", " "])))
+        self.assertTrue(self.check(lambda d: d["known"][0].update(source="   ")))
+
+    def test_abbreviations_not_sentence_breaks(self):
+        from schema_review.validate import _sentences
+        self.assertEqual(_sentences("Use e.g. float16 first. It is unmeasured."), 2)
+        self.assertEqual(_sentences("Costs 1.14 GB. See Fig. 2 for details. Done."), 3)
+
+    def test_empty_known_rejected(self):
+        self.assertTrue(self.check(lambda d: d.update(known=[])))
+
+    def test_verdict_summary_contradiction(self):
+        def m(d):
+            d["scope_verdict"]["per_type"]["float16"] = "near-term-in-scope"
+        errs = self.check(m)
+        self.assertTrue(any("says 'out of scope'" in e for e in errs))
+
+    def test_blocker_class_restricted(self):
+        errs = self.check(lambda d: d["scope_verdict"]["primary_blocker"].update(evidence_class="requires-change"))
+        self.assertTrue(any("primary_blocker" in e for e in errs))
+
+    def test_duplicates_rejected(self):
+        errs = self.check(lambda d: d["known"].append(copy.deepcopy(d["known"][0])))
+        self.assertTrue(any("duplicate" in e for e in errs))
+
+    def test_extensibility_warning_in_every_change_list(self):
+        for name in ("type_system", "emitter_lowering", "operators", "validation"):
+            doc = copy.deepcopy(EXAMPLE)
+            doc["required_changes"][name][0]["extensibility_verified"] = True
+            _, warns = validate_review(doc, load_schema())
+            self.assertTrue(any(name in w for w in warns), name)
+
+    def test_example_has_no_extensibility_claims(self):
+        _, warns = validate_review(EXAMPLE, load_schema())
+        self.assertEqual(warns, [])
+
+    def test_schema_ships_inside_package(self):
+        from schema_review.validate import DEFAULT_SCHEMA
+        self.assertEqual(DEFAULT_SCHEMA.parent.parent.name, "schema_review")
+        self.assertTrue(DEFAULT_SCHEMA.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

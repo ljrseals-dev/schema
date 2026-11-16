@@ -52,7 +52,7 @@ system, and the repository states that no native ternary arithmetic is claimed.
 
 ## 3. Schema design
 
-A review is a JSON document (`schemas/quantized_emitter_review.schema.json`)
+A review is a JSON document (`src/schema_review/data/quantized_emitter_review.schema.json`)
 with these required parts.
 
 **Evidence classes.** Each claim has one of: `known-source`, `known-measured`,
@@ -69,7 +69,9 @@ is pinned to `true`.
 
 **Extensibility flag.** Each required change has `extensibility_verified`. It
 should be `false` unless the material shows the target (type system, emitter,
-processor set) can be extended that way.
+processor set) can be extended that way. Any `true` raises a warning. The
+worked example sets every flag to `false`, because the author's notes do not
+show extensibility for any of them.
 
 **Verification limits.** A required, non-empty list of what could not be
 compiled or run.
@@ -91,8 +93,10 @@ compiled or run.
 `schema_review` performs structural validation with a small draft-07 subset
 checker, then applies semantic rules that JSON Schema cannot express: `known`
 holds only `known-*` claims with a source; a `near-term-in-scope` verdict needs
-a `known-*` blocker assessment; the bottom line is two to four sentences; and
-verification limits are non-empty. Ten unit tests cover these rules. The
+a `known-*` blocker assessment and cannot coexist with 'out of scope' wording
+in the summary or bottom line; blank strings and duplicate entries are rejected;
+the bottom line is two to four sentences; and verification limits are
+non-empty. The verdict-consistency and sentence-count rules are heuristics. Unit tests cover these rules. The
 validator catches malformed or internally inconsistent reviews. It cannot tell
 whether a cited source supports a claim.
 

@@ -2,4 +2,4 @@
 from .validate import load_schema, validate_review
 
 __all__ = ["load_schema", "validate_review"]
-__version__ = "0.1.0"
+__version__ = "0.2.0"

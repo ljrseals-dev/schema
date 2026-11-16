@@ -2,8 +2,8 @@
 
 The structural checker supports only the keywords used by the bundled schema
 (type, required, properties, additionalProperties, items, enum, const,
-minItems, minLength, $ref to #/definitions). It is not a general JSON Schema
-implementation; use the `jsonschema` package for that.
+minItems, minLength, pattern, $ref to #/definitions). It is not a general JSON
+Schema implementation; use the `jsonschema` package for that.
 """
 from __future__ import annotations
 
@@ -12,14 +12,15 @@ import re
 from pathlib import Path
 from typing import Any
 
-DEFAULT_SCHEMA = (
-    Path(__file__).resolve().parents[2] / "schemas" / "quantized_emitter_review.schema.json"
-)
+DEFAULT_SCHEMA = Path(__file__).resolve().parent / "data" / "quantized_emitter_review.schema.json"
 _TYPES = {
     "object": dict, "array": list, "string": str, "boolean": bool,
     "integer": int, "number": (int, float),
 }
 KNOWN = {"known-source", "known-measured", "known-documented"}
+BLOCKER_OK = KNOWN | {"unverified", "assumption"}
+_ABBR = ("e.g.", "i.e.", "etc.", "vs.", "cf.", "Fig.", "Sec.", "No.")
+CHANGE_LISTS = ("type_system", "emitter_lowering", "operators", "validation")
 
 
 def load_schema(path: str | Path | None = None) -> dict[str, Any]:
@@ -37,7 +38,7 @@ def _resolve(ref: str, root: dict[str, Any]) -> dict[str, Any]:
 
 def _check(inst: Any, sch: dict[str, Any], root: dict[str, Any], path: str, errs: list[str]) -> None:
     if "$ref" in sch:
-        sch = _resolve(sch["$ref"], root)
+        sch = {**_resolve(sch["$ref"], root), **{k: v for k, v in sch.items() if k != "$ref"}}
     t = sch.get("type")
     if t:
         ok = isinstance(inst, _TYPES[t])
@@ -50,8 +51,11 @@ def _check(inst: Any, sch: dict[str, Any], root: dict[str, Any], path: str, errs
         errs.append(f"{path}: must equal {sch['const']!r}")
     if "enum" in sch and inst not in sch["enum"]:
         errs.append(f"{path}: {inst!r} not in {sch['enum']}")
-    if isinstance(inst, str) and len(inst) < sch.get("minLength", 0):
-        errs.append(f"{path}: shorter than minLength {sch['minLength']}")
+    if isinstance(inst, str):
+        if len(inst) < sch.get("minLength", 0):
+            errs.append(f"{path}: shorter than minLength {sch['minLength']}")
+        if "pattern" in sch and not re.search(sch["pattern"], inst):
+            errs.append(f"{path}: does not match pattern {sch['pattern']!r} (blank?)")
     if isinstance(inst, list):
         if len(inst) < sch.get("minItems", 0):
             errs.append(f"{path}: fewer than {sch['minItems']} items")
@@ -73,42 +77,67 @@ def _check(inst: Any, sch: dict[str, Any], root: dict[str, Any], path: str, errs
 
 
 def _sentences(text: str) -> int:
-    return len([s for s in re.split(r"(?<=[.!?])\s+", text.strip()) if s])
+    t = text.strip()
+    for a in _ABBR:
+        t = t.replace(a, a.replace(".", "\x00"))
+    return len([s for s in re.split(r"(?<=[.!?])\s+", t) if s.strip()])
+
+
+def _dupes(label: str, texts: list[str], errs: list[str]) -> None:
+    seen: set[str] = set()
+    for i, raw in enumerate(texts):
+        key = " ".join(raw.lower().split())
+        if key in seen:
+            errs.append(f"{label}[{i}]: duplicate of an earlier entry")
+        seen.add(key)
 
 
 def semantic_errors(doc: dict[str, Any]) -> tuple[list[str], list[str]]:
     """Return (errors, warnings) for rules a JSON Schema cannot express."""
     errs: list[str] = []
     warns: list[str] = []
+    known = doc.get("known", [])
+    proposed = doc.get("proposed_unmeasured", {}).get("claims", [])
 
-    for i, c in enumerate(doc.get("known", [])):
+    for i, c in enumerate(known):
         cls = str(c.get("evidence_class", ""))
         if cls not in KNOWN:
             errs.append(f"known[{i}]: section 'known' may only hold known-* claims")
         elif not c.get("source"):
             errs.append(f"known[{i}]: known-* claim requires a source")
-    for i, c in enumerate(doc.get("proposed_unmeasured", {}).get("claims", [])):
+    for i, c in enumerate(proposed):
         if c.get("evidence_class") != "proposed-unmeasured":
             errs.append(f"proposed_unmeasured.claims[{i}]: must be proposed-unmeasured")
 
     verdict = doc.get("scope_verdict", {})
     blocker = verdict.get("primary_blocker", {})
-    if blocker.get("evidence_class") in KNOWN and not blocker.get("source"):
+    bclass = blocker.get("evidence_class")
+    if bclass not in BLOCKER_OK:
+        errs.append(f"scope_verdict.primary_blocker: evidence_class must be one of {sorted(BLOCKER_OK)}, not {bclass!r}")
+    if bclass in KNOWN and not blocker.get("source"):
         errs.append("scope_verdict.primary_blocker: known-* claim requires a source")
-    for typ, v in verdict.get("per_type", {}).items():
-        if v == "near-term-in-scope" and blocker.get("evidence_class") not in KNOWN:
+    per_type = verdict.get("per_type", {})
+    for typ, v in per_type.items():
+        if v == "near-term-in-scope" and bclass not in KNOWN:
             errs.append(f"scope_verdict.{typ}: near-term-in-scope needs a known-* primary blocker assessment")
-
-    if not doc.get("verification_limits"):
-        errs.append("verification_limits: must not be empty")
+    text = (verdict.get("summary", "") + " " + doc.get("bottom_line", "")).lower()
+    if "near-term-in-scope" in per_type.values() and ("out of scope" in text or "out-of-scope" in text):
+        errs.append("scope_verdict: a type is near-term-in-scope but the summary or bottom line says 'out of scope'")
 
     n = _sentences(doc.get("bottom_line", ""))
     if not 2 <= n <= 4:
         errs.append(f"bottom_line: expected 2-4 sentences, found {n}")
 
-    for i, c in enumerate(doc.get("required_changes", {}).get("type_system", [])):
-        if c.get("extensibility_verified"):
-            warns.append(f"required_changes.type_system[{i}]: extensibility_verified=true; confirm the material shows this")
+    _dupes("known", [c.get("statement", "") for c in known], errs)
+    _dupes("proposed_unmeasured.claims", [c.get("statement", "") for c in proposed], errs)
+    _dupes("open_design_questions", [q.get("question", "") for q in doc.get("open_design_questions", [])], errs)
+    changes = doc.get("required_changes", {})
+    for name in CHANGE_LISTS:
+        items = changes.get(name, [])
+        _dupes(f"required_changes.{name}", [c.get("statement", "") for c in items], errs)
+        for i, c in enumerate(items):
+            if c.get("extensibility_verified"):
+                warns.append(f"required_changes.{name}[{i}]: extensibility_verified=true; confirm the material shows this")
     return errs, warns
 
 
