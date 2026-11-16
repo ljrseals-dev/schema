@@ -9,6 +9,7 @@ checks against the jsonschema package.
 from __future__ import annotations
 
 import json
+import math
 import re
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,7 @@ _TYPES = {
     "boolean": bool,
     "integer": int,
     "number": (int, float),
+    "null": type(None),
 }
 KNOWN = {"known-source", "known-measured", "known-documented"}
 BLOCKER_OK = KNOWN | {"unverified", "assumption"}
@@ -103,7 +105,13 @@ def _matches_type(instance: Any, expected: str) -> bool:
     if expected == "number":
         return isinstance(instance, (int, float)) and not isinstance(instance, bool)
     if expected == "integer":
-        return isinstance(instance, int) and not isinstance(instance, bool)
+        return (
+            isinstance(instance, (int, float))
+            and not isinstance(instance, bool)
+            and math.isfinite(instance)
+            and instance.is_integer() if isinstance(instance, float)
+            else isinstance(instance, int) and not isinstance(instance, bool)
+        )
     return isinstance(instance, python_type)
 
 
