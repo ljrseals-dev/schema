@@ -4,58 +4,71 @@ An evidence-classed review schema, master prompt, and validator for assessing
 whether quantized weight types (ternary, int8, float16) are in scope for the
 Cmajor ONNX emitter (`onnxToCmajor.py`).
 
-The accompanying note is [`Paper.md`](Paper.md).
-
 ## Contents
 
 | Path | Purpose |
 |---|---|
-| `src/schema_review/data/quantized_emitter_review.schema.json` | JSON Schema (draft-07) for a review output |
-| `prompts/master_prompt.md` | Reviewer prompt (v2) whose output targets the schema |
+| `src/schema_review/data/quantized_emitter_review.schema.json` | Draft-07 review-output schema |
+| `prompts/master_prompt.md` | Reviewer prompt (v3) whose output targets the schema |
 | `examples/review_example.json` | Worked review of the `realm-quant` findings |
-| `src/schema_review/` | Dependency-free validator: structural checks plus semantic rules |
-| `tests/` | `unittest` suite |
+| `src/schema_review/` | Dependency-free runtime validator |
+| `scripts/independent_check.py` | Clean-room, schema-derived differential check |
+| `tests/` | Unit, regression, and independent validation tests |
 
-## Use
+## Install and use
+
+Runtime installation has no third-party dependencies:
 
 ```bash
-python -m pip install -e .
+python -m pip install .
 python -m schema_review examples/review_example.json
-python -m unittest discover -s tests -v
 ```
 
-Exit code is 0 when the review validates and 1 otherwise. Warnings go to stderr.
+To run the full development test suite, including the independent Draft-07
+oracle, install the test extra:
 
-## What the schema enforces
+```bash
+python -m pip install -e '.[test]'
+python -m unittest discover -s tests -v
+python scripts/independent_check.py validation_report.json
+```
 
-- Every claim carries one `evidence_class`.
-- Corrections to the prompt itself live in `prompt_premise_corrections`,
-  separate from corrections to the material under review.
-- `proposed_unmeasured.no_implementation_assumed` must be `true`.
-- Each required change carries `extensibility_verified`.
-- `verification_limits` is required and must be non-empty.
+The CLI returns 0 for a valid review, 1 for validation errors, and 2 when the
+review or schema cannot be read or parsed. Warnings are written to stderr.
 
-Semantic rules beyond JSON Schema (in `validate.py`): `known` is non-empty and
-holds only `known-*` claims, each with a `source`; the primary blocker is a
-`known-*`, `unverified`, or `assumption` claim; a `near-term-in-scope` verdict
-needs a `known-*` blocker and cannot coexist with 'out of scope' in the summary
-or bottom line; no blank strings; no duplicate entries within a section; the
-bottom line is 2-4 sentences. Any `extensibility_verified: true` raises a
-warning.
+## What is enforced
 
-## Limits
+The JSON Schema requires evidence classes, separates prompt-premise
+corrections from evidence corrections, requires
+`proposed_unmeasured.no_implementation_assumed` to be true, requires each
+proposed change to state whether extensibility was verified, and requires
+non-empty verification limits.
 
-- The verdict-consistency and sentence-count rules are heuristics (substring
-  and regex matching). A reviewer can still evade them.
-- The validator checks form, not truth. It cannot tell whether a cited source
-  supports a claim.
-- The structural checker implements only the keywords the bundled schema uses.
-  It has not been compared against the `jsonschema` package.
-- The example review rests on the author's own notes in `realm-quant`; the
-  Cmajor repository itself was not read.
-- Nothing here has been evaluated for agreement between reviewers.
-- The non-editable install path (`pip install .`) is covered by a CI step that
-  has not yet run.
+Additional semantic rules in `validate.py` require known claims to have
+known-* classes and sources, constrain the primary blocker, require a known-*
+blocker for near-term scope, check explicit scope contradictions, reject
+duplicate entries within sections, and require a 2-4 sentence bottom line.
+An `extensibility_verified: true` value produces a warning for human review.
+
+## Validation and limits
+
+- The structural checker implements the documented subset used by the
+  bundled schema; it is not a general-purpose JSON Schema implementation.
+- CI compares the subset checker with the independent `jsonschema` Draft-07
+  implementation over the bundled fixture and generated structural mutations.
+  This is differential coverage, not exhaustive conformance testing.
+- The semantic scope-consistency and sentence-count checks remain heuristics.
+  They cannot prove that a review is logically consistent in every phrasing.
+- The validator checks structure and selected consistency rules, not whether
+  cited sources actually support claims. Source verification remains a human
+  or separate evidence-retrieval task.
+- The worked review attributes Cmajor findings to the author's
+  `realm-quant` notes; the Cmajor repository itself was not independently read
+  as part of this package.
+- No reviewer-agreement study or codec-quality evaluation is claimed.
+
+See [INTEGRATION.md](INTEGRATION.md) for the execution boundaries and CI
+artifact details.
 
 ## License
 
