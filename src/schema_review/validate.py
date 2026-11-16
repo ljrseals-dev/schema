@@ -55,12 +55,20 @@ def _reject_nonfinite(value: str) -> None:
     raise ValueError(f"non-standard JSON numeric constant: {value}")
 
 
+def _parse_finite_float(value: str) -> float:
+    parsed = float(value)
+    if not math.isfinite(parsed):
+        raise ValueError(f"JSON number is outside the supported finite range: {value}")
+    return parsed
+
+
 def load_json(path: str | Path) -> Any:
     """Read strict JSON (reject duplicate keys and NaN/Infinity)."""
     return json.loads(
         Path(path).read_text(encoding="utf-8"),
         object_pairs_hook=_unique_object,
         parse_constant=_reject_nonfinite,
+        parse_float=_parse_finite_float,
     )
 
 
