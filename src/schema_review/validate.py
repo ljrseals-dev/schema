@@ -31,6 +31,11 @@ _ABBR = (
     "Dr.", "Mr.", "Mrs.", "Ms.", "Prof.", "U.S.", "U.K.",
 )
 CHANGE_LISTS = ("type_system", "emitter_lowering", "operators", "validation")
+_SUPPORTED_SCHEMA_KEYS = {
+    "$schema", "$id", "$ref", "title", "description", "definitions",
+    "type", "required", "properties", "additionalProperties", "items",
+    "enum", "const", "minItems", "minLength", "pattern",
+}
 
 
 class SchemaDefinitionError(ValueError):
@@ -124,6 +129,10 @@ def _check(
         errs.append(f"{path}: schema node must be an object")
         return
 
+    unsupported = sorted(set(sch) - _SUPPORTED_SCHEMA_KEYS)
+    for keyword in unsupported:
+        errs.append(f"{path}: unsupported schema keyword {keyword!r}")
+
     # Draft-07 says sibling keywords beside $ref are ignored.
     if "$ref" in sch:
         try:
@@ -187,6 +196,8 @@ def _check(
         required = sch.get("required", [])
         if not isinstance(required, list) or any(not isinstance(k, str) for k in required):
             errs.append(f"{path}: schema required must be an array of strings")
+        elif len(required) != len(set(required)):
+            errs.append(f"{path}: schema required contains duplicate keys")
         else:
             for key in required:
                 if key not in inst:
