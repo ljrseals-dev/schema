@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "schema-review"
-version = "0.3.0"
+version = "0.4.0"
 description = "Evidence-classed review schema and validator for quantized-type proposals in the Cmajor ONNX emitter"
 readme = "README.md"
 license = { text = "MIT" }
