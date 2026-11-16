@@ -51,6 +51,12 @@ class FallbackRuntimeTests(unittest.TestCase):
         with self.assertRaises(FallbackError):
             dequantize_int8([1], [1], scale=0.0)
 
+    def test_int8_rejects_non_integer_or_out_of_range_zero_point(self):
+        for zero_point in (0.5, 128, -129):
+            with self.subTest(zero_point=zero_point):
+                with self.assertRaises(FallbackError):
+                    dequantize_int8([1], [1], scale=0.5, zero_point=zero_point)
+
     def test_int8_rejects_invalid_axis_parameter_shape(self):
         with self.assertRaises(FallbackError):
             dequantize_int8([1, 2, 3, 4], [2, 2], scale=[0.5, 1.0, 2.0], axis=0)
