@@ -34,6 +34,17 @@ class StructuralRegressionTests(unittest.TestCase):
         errors, _ = validate_review(1, {"enum": [True]}, structural_only=True)
         self.assertTrue(errors)
 
+    def test_integral_float_matches_json_schema_integer_type(self) -> None:
+        self.assertEqual(validate_review(1.0, {"type": "integer"}, True)[0], [])
+        self.assertTrue(Draft7Validator({"type": "integer"}).is_valid(1.0))
+
+    def test_null_type_is_supported(self) -> None:
+        self.assertEqual(validate_review(None, {"type": "null"}, True)[0], [])
+        self.assertTrue(validate_review("not-null", {"type": "null"}, True)[0])
+
+    def test_large_integer_does_not_overflow_type_check(self) -> None:
+        self.assertEqual(validate_review(10**1000, {"type": "integer"}, True)[0], [])
+
     def test_integer_and_integral_float_are_json_equal_for_const(self) -> None:
         errors, _ = validate_review(1.0, {"const": 1}, structural_only=True)
         self.assertEqual(errors, [])
