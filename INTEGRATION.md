@@ -23,7 +23,9 @@ that already has its own prompts, schema, and worked review.
    if any mandatory mutant is accepted. It is deliberately limited to the
    bundled schema and fixture; it does not independently test semantic rules
    or establish general JSON Schema conformance.
-5. **CI artifact.** The workflow runs the harness and uploads
-   `validation_report.json` as `independent-validation-report`.
+5. **CI artifact.** The unit-test invocation runs the harness once and writes
+   `validation_report.json` when `SCHEMA_REVIEW_VALIDATION_REPORT` is set. CI
+   uploads that report as `independent-validation-report`; it does not repeat
+   the expensive mutation sweep in a separate step.
 6. **Not yet run here:** the hosted GitHub Actions workflow. Its result must be
    read from the Actions run; adding the workflow is not evidence that it ran.
