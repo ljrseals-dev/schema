@@ -4,6 +4,7 @@ from __future__ import annotations
 import contextlib
 import importlib.util
 import io
+import os
 import unittest
 from pathlib import Path
 
@@ -20,7 +21,7 @@ class IndependentCheckTests(unittest.TestCase):
 
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
-            result = module.main()
+            result = module.main(os.environ.get("SCHEMA_REVIEW_VALIDATION_REPORT"))
 
         self.assertEqual(result, 0, output.getvalue()[-4000:])
 
