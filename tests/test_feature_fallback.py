@@ -1,7 +1,11 @@
 """Tests for the ONNX-to-Cmajor feature/fallback decision model."""
 from __future__ import annotations
 
+import json
 import unittest
+from pathlib import Path
+
+from jsonschema import Draft7Validator
 
 from schema_review.feature_fallback import (
     FALLBACK_TRANSFORMS,
@@ -9,6 +13,8 @@ from schema_review.feature_fallback import (
     classify_feature,
     classify_model,
 )
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def native_report():
@@ -92,6 +98,11 @@ class FeatureFallbackTests(unittest.TestCase):
         report["capabilities"]["runtime_parity_verified"] = False
         self.assertEqual(classify_feature("float16", report)["decision"], "unsupported")
 
+    def test_fallback_requires_evidence_for_shared_gates(self):
+        report = fallback_report("int8")
+        del report["evidence"]["operator_coverage_verified"]
+        self.assertEqual(classify_feature("int8", report)["decision"], "blocked")
+
     def test_model_readiness_is_all_requested_features(self):
         report = {
             "requested_features": ["int8", "float16"],
@@ -108,9 +119,24 @@ class FeatureFallbackTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "duplicates"):
             classify_model({"requested_features": ["int8", "int8"], "features": {}})
 
+    def test_non_string_requested_feature_rejected_cleanly(self):
+        with self.assertRaisesRegex(ValueError, "entries must be strings"):
+            classify_model({"requested_features": [{"dtype": "int8"}], "features": {}})
+
     def test_unknown_feature_rejected(self):
         with self.assertRaisesRegex(ValueError, "unsupported feature"):
             classify_feature("int4", native_report())
+
+    def test_report_schema_accepts_valid_fallback_and_rejects_bad_shape(self):
+        schema = json.loads((ROOT / "src/schema_review/data/feature_fallback.schema.json").read_text())
+        valid = {
+            "requested_features": ["int8"],
+            "features": {"int8": fallback_report("int8")},
+        }
+        validator = Draft7Validator(schema)
+        self.assertTrue(validator.is_valid(valid))
+        invalid = {"requested_features": ["int4"], "features": {}}
+        self.assertFalse(validator.is_valid(invalid))
 
 
 if __name__ == "__main__":
