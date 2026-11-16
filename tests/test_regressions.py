@@ -81,11 +81,28 @@ class StructuralRegressionTests(unittest.TestCase):
         errors, _ = validate_review({"value": 1}, {"properties": {"value": {"$ref": "#/missing"}}}, True)
         self.assertTrue(any("unresolved $ref" in error for error in errors))
 
+    def test_fixture_copy_matches_example(self) -> None:
+        example = json.loads((ROOT / "examples" / "review_example.json").read_text())
+        fixture = json.loads((ROOT / "tests" / "fixtures" / "review_example.json").read_text())
+        self.assertEqual(fixture, example)
+
     def test_bundled_schema_matches_draft7_oracle_for_fixture(self) -> None:
         schema = load_schema()
         fixture = json.loads((ROOT / "examples" / "review_example.json").read_text())
         self.assertTrue(Draft7Validator(schema).is_valid(fixture))
         self.assertEqual(validate_review(fixture, schema, structural_only=True)[0], [])
+
+    def test_unsupported_schema_keyword_is_not_silently_ignored(self) -> None:
+        errors, _ = validate_review(4, {"type": "integer", "minimum": 5}, True)
+        self.assertTrue(any("unsupported schema keyword 'minimum'" in error for error in errors))
+
+    def test_draft7_ref_siblings_are_ignored(self) -> None:
+        schema = {
+            "definitions": {"positive": {"type": "integer"}},
+            "$ref": "#/definitions/positive",
+            "minimum": 10,
+        }
+        self.assertEqual(validate_review(3, schema, True)[0], [])
 
     def test_invalid_regex_is_reported(self) -> None:
         errors, _ = validate_review("value", {"type": "string", "pattern": "["}, True)
