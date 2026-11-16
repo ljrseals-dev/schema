@@ -129,10 +129,6 @@ def _check(
         errs.append(f"{path}: schema node must be an object")
         return
 
-    unsupported = sorted(set(sch) - _SUPPORTED_SCHEMA_KEYS)
-    for keyword in unsupported:
-        errs.append(f"{path}: unsupported schema keyword {keyword!r}")
-
     # Draft-07 says sibling keywords beside $ref are ignored.
     if "$ref" in sch:
         try:
@@ -140,6 +136,10 @@ def _check(
         except SchemaDefinitionError as exc:
             errs.append(f"{path}: invalid schema: {exc}")
             return
+
+    unsupported = sorted(set(sch) - _SUPPORTED_SCHEMA_KEYS)
+    for keyword in unsupported:
+        errs.append(f"{path}: unsupported schema keyword {keyword!r}")
 
     expected = sch.get("type")
     if expected is not None:
