@@ -15,5 +15,15 @@ that already has its own prompts, schema, and worked review.
    <schema.json> --structural-only`.
 3. **Fixture.** `tests/fixtures/review_example.json` matches the bundled schema
    only. It is not the repository's own worked review.
-4. **Not yet run:** the GitHub Actions workflow, and validation of any
-   pre-existing worked review against any pre-existing schema.
+4. **Independent execution and validation.** Run
+   `python scripts/independent_check.py [report.json]` to copy only the
+   `schema_review` package into a temporary directory, invoke its CLI from an
+   unrelated working directory twice, and compare the results. The harness
+   derives structural mutation expectations from the bundled schema and fails
+   if any mandatory mutant is accepted. It is deliberately limited to the
+   bundled schema and fixture; it does not independently test semantic rules
+   or establish general JSON Schema conformance.
+5. **CI artifact.** The workflow runs the harness and uploads
+   `validation_report.json` as `independent-validation-report`.
+6. **Not yet run here:** the hosted GitHub Actions workflow. Its result must be
+   read from the Actions run; adding the workflow is not evidence that it ran.
