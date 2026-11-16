@@ -92,6 +92,7 @@ class FallbackRuntimeTests(unittest.TestCase):
             metadata, 0.0,
         )
         self.assertTrue(result["metadata_preserved"])
+        self.assertEqual(result["preserved_metadata"], metadata)
         self.assertEqual(metadata["quantization"]["axis"], 0)
 
     def test_missing_tolerance_is_not_accepted(self):
