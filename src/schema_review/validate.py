@@ -219,28 +219,27 @@ def _dupes(label: str, texts: list[str], errs: list[str]) -> None:
 
 
 def _contradicts_near_term(per_type: dict[str, Any], text: str) -> bool:
-    """Conservative check for explicit, type-specific or global scope conflicts."""
+    """Detect direct type/scope associations without crossing punctuation."""
     for type_name, verdict in per_type.items():
         if verdict != "near-term-in-scope":
             continue
         escaped = re.escape(type_name)
         type_then_scope = re.search(
-            rf"\b{escaped}\b(?:(?!\bnot\b)[^.!?]){{0,80}}\bout[- ]of[- ]scope\b",
+            rf"\b{escaped}\b(?:\s+\w+){{0,5}}\s+out[- ]of[- ]scope\b",
             text,
         )
         scope_then_type = re.search(
-            rf"\bout[- ]of[- ]scope\b(?:(?!\bnot\b)[^.!?]){{0,80}}\b{escaped}\b",
+            rf"\bout[- ]of[- ]scope\s+(?:for|in)\s+(?:the\s+)?\b{escaped}\b",
             text,
         )
         global_scope = re.search(
             r"\b(?:all(?:\s+three)?|quantized)\s+types?\b"
-            r"(?:(?!\bnot\b)[^.!?]){0,80}\bout[- ]of[- ]scope\b",
+            r"(?:\s+\w+){0,5}\s+out[- ]of[- ]scope\b",
             text,
         )
         if type_then_scope or scope_then_type or global_scope:
             return True
     return False
-
 
 def semantic_errors(doc: dict[str, Any]) -> tuple[list[str], list[str]]:
     """Return (errors, warnings) for rules that are not expressible in the schema."""
