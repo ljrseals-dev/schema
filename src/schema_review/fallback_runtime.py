@@ -86,6 +86,19 @@ def _axis_parameters(param: Any, shape: list[int], axis: int, name: str) -> list
     return parsed
 
 
+def _int8_zero_points(param: Any, shape: list[int], axis: int | None = None) -> list[int]:
+    values = param if isinstance(param, (list, tuple)) else [param]
+    expected = 1 if axis is None else shape[axis]
+    if len(values) not in (1, expected):
+        raise FallbackError("zero_point length must be 1 or shape[axis]")
+    if any(type(v) is not int or not -128 <= v <= 127 for v in values):
+        raise FallbackError("INT8 zero_point values must be integers in [-128, 127]")
+    parsed = list(values)
+    if len(parsed) == 1 and axis is not None:
+        parsed *= expected
+    return parsed
+
+
 def dequantize_int8(values: Iterable[int], shape: list[int], *,
                     scale: Any, zero_point: Any = 0, axis: int | None = None) -> list[float]:
     """Dequantize signed INT8 values using scalar or ONNX per-axis parameters."""
@@ -95,7 +108,7 @@ def dequantize_int8(values: Iterable[int], shape: list[int], *,
         raise FallbackError("INT8 payload values must be signed integers in [-128, 127]")
     if axis is None:
         scales = [_finite_number(scale, "scale")]
-        zeros = [_finite_number(zero_point, "zero_point")]
+        zeros = _int8_zero_points(zero_point, shape)
         if scales[0] <= 0:
             raise FallbackError("scale must be positive")
         return [(v - zeros[0]) * scales[0] for v in raw]
@@ -103,7 +116,7 @@ def dequantize_int8(values: Iterable[int], shape: list[int], *,
         raise FallbackError("axis is outside tensor rank")
     axis %= len(shape)
     scales = _axis_parameters(scale, shape, axis, "scale")
-    zeros = _axis_parameters(zero_point, shape, axis, "zero_point")
+    zeros = _int8_zero_points(zero_point, shape, axis)
     if any(s <= 0 for s in scales):
         raise FallbackError("all scales must be positive")
     stride = math.prod(shape[axis + 1:])
@@ -123,7 +136,7 @@ def reference_dequantize_int8(values: Iterable[int], shape: list[int], *,
         raise FallbackError("INT8 payload values must be signed integers in [-128, 127]")
     if axis is None:
         s = _finite_number(scale, "scale")
-        z = _finite_number(zero_point, "zero_point")
+        z = _int8_zero_points(zero_point, shape)[0]
         if s <= 0:
             raise FallbackError("scale must be positive")
         return [float(v - z) * s for v in raw]
@@ -131,7 +144,7 @@ def reference_dequantize_int8(values: Iterable[int], shape: list[int], *,
         raise FallbackError("axis is outside tensor rank")
     axis = axis % len(shape)
     scale_values = list(scale) if isinstance(scale, (list, tuple)) else [scale]
-    zero_values = list(zero_point) if isinstance(zero_point, (list, tuple)) else [zero_point]
+    zero_values = _int8_zero_points(zero_point, shape, axis)
     if len(scale_values) not in (1, shape[axis]) or len(zero_values) not in (1, shape[axis]):
         raise FallbackError("per-axis parameter length mismatch")
     scale_values = [_finite_number(x, "scale") for x in scale_values]
