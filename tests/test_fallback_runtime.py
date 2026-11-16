@@ -103,6 +103,31 @@ class FallbackRuntimeTests(unittest.TestCase):
         with self.assertRaises(FallbackError):
             execute_and_validate("int4", {}, {}, 0.0)
 
+    def test_independent_result_is_required_for_classifier_fallback(self):
+        from schema_review.feature_fallback import (
+            FALLBACK_TRANSFORMS, NATIVE_GATES, classify_feature,
+        )
+        payload = {"values": [4, 8], "shape": [2], "scale": 0.25, "zero_point": 0}
+        checked = execute_and_validate("int8", payload, {"scale": 0.25}, 0.0)
+        report = {
+            "capabilities": {gate: True for gate in NATIVE_GATES},
+            "evidence": {gate: f"probe:{gate}" for gate in NATIVE_GATES},
+            "fallback": {
+                "enabled": True,
+                "transform": FALLBACK_TRANSFORMS["int8"],
+                "metadata_preserved": checked["metadata_preserved"],
+                "validation_passed": checked["validation_passed"],
+                "error_tolerance": checked["error_tolerance"],
+                "measured_error": checked["measured_error"],
+                "evidence": checked["evidence"],
+            },
+        }
+        report["capabilities"]["representation_supported"] = False
+        report["capabilities"]["emitter_lowering_supported"] = False
+        self.assertEqual(classify_feature("int8", report)["decision"], "fallback")
+        report["fallback"]["validation_passed"] = False
+        self.assertEqual(classify_feature("int8", report)["decision"], "unsupported")
+
 
 if __name__ == "__main__":
     unittest.main()
