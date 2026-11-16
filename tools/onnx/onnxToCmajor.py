@@ -535,6 +535,11 @@ def _dequantize_int8_initializers(model):
             raise ValueError(f"{node.name or 'DequantizeLinear'}: data input must be an initializer")
         if scale_name not in initializer_by_name:
             raise ValueError(f"{node.name or 'DequantizeLinear'}: scale must be an initializer")
+        graph_input_names = {item.name for item in graph.input}
+        if scale_name in graph_input_names:
+            raise ValueError(f"{scale_name}: dynamic scale graph inputs are not supported")
+        if zero_name is not None and zero_name in graph_input_names:
+            raise ValueError(f"{zero_name}: dynamic zero-point graph inputs are not supported")
         data_tensor = initializer_by_name[data_name]
         if data_tensor.data_type != onnx.TensorProto.INT8:
             raise ValueError(f"{data_name}: this fallback supports signed INT8 data only")
@@ -670,6 +675,8 @@ def _promote_float16_tensors(model):
 
 def prepare_quantized_model(model):
     """Apply only explicit, supported fallback rewrites; reject ambiguous tensors."""
+    if model.graph.sparse_initializer:
+        raise ValueError("sparse initializers are not supported by this emitter")
     # DequantizeLinear is admitted only as an initializer-folding pattern;
     # _dequantize_int8_initializers removes it before ordinary code generation.
     allowed_ops = set(nodeEndpointNames) | {"DequantizeLinear"}
