@@ -34,6 +34,7 @@ WRONG_TYPE: dict[type, Any] = {
     bool: "not-a-boolean",
     int: "not-an-integer",
     float: "not-a-number",
+    type(None): "not-null",
 }
 
 
