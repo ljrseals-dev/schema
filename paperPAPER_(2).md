@@ -1,6 +1,7 @@
 # Evidence-Classed Review of Quantized-Type Proposals for the Cmajor ONNX Emitter: A Schema, a Validator, and an Independent Validation Harness
 
 **Authors:** Lewis Seals and Angela La'Vette Seals
+**DOI:** https://zenodo.org/records/24267777
 **Date:** November 2026
 **Status:** Technical report. It describes a review schema, a validator, and a validation harness. It reports measurements of the validator only. It reports no measurements of Cmajor, of quantized models, or of audio quality.
 
