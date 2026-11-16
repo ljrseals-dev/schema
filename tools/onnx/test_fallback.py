@@ -58,6 +58,22 @@ class QuantizedEmitterTests(unittest.TestCase):
             numpy_helper.to_array(model.graph.initializer[0]), [-1.0, 0.0, 2.0],
         )
 
+    def test_int8_per_axis_dequantization_uses_declared_axis(self):
+        q = numpy_helper.from_array(np.array([[-2, 0], [4, 5]], dtype=np.int8), name="q")
+        scale = numpy_helper.from_array(np.array([0.5, 0.25], dtype=np.float32), name="scale")
+        zero = numpy_helper.from_array(np.array([0, 1], dtype=np.int8), name="zero")
+        dq = helper.make_node(
+            "DequantizeLinear", ["q", "scale", "zero"], ["deq"],
+            name="dq", axis=1,
+        )
+        output = tensor_value_info("deq", TensorProto.FLOAT, [2, 2])
+        model = self.model([dq], [q, scale, zero], [output])
+        EMITTER.prepare_quantized_model(model)
+        np.testing.assert_allclose(
+            numpy_helper.to_array(model.graph.initializer[0]),
+            np.array([[-1.0, -0.25], [2.0, 1.0]], dtype=np.float32),
+        )
+
     def test_ternary_requires_and_uses_explicit_contract(self):
         packed = numpy_helper.from_array(np.array([0b00100100], dtype=np.uint8), name="weights")
         contract = (
