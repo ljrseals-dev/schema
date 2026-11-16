@@ -117,11 +117,39 @@ after seeing a failing result.
 - Never silently drop quantization metadata, substitute zero/random weights,
   clamp invalid scales, or emit a partially converted model as successful.
 
-## Current evidence boundary
+## Executable fallback and independent validation
 
-This repository contains the decision model and report contract only. The
-actual ONNX inspection, Cmajor capability probing, tensor transformations,
-compiler invocation and runtime parity integration remain to be implemented
-against the target adapter/compiler. A `native` or `fallback` decision is
-only as trustworthy as the adapter's evidence inputs; the classifier cannot
-independently verify that those inputs are true.
+`schema_review.fallback_runtime` now provides executable transforms over
+already-decoded initializer payloads:
+
+- FLOAT16: raw IEEE-754 binary16 words are promoted to binary32-valued floats.
+  NaN and infinity are rejected.
+- INT8: signed values are dequantized with scalar or per-axis scale and
+  zero-point parameters, including negative axis normalization.
+- Ternary: two-bit symbols are decoded only from an explicit three-entry
+  codebook, bit order, shape and value count. Reserved symbols and non-zero
+  padding are rejected.
+
+Each transform is checked against a separately implemented standard-library
+reference path. `execute_and_validate` returns output values, shape, metadata
+preservation, maximum absolute/relative error, tolerance, validation status,
+and evidence identifiers. Its `measured_error`, `error_tolerance`,
+`validation_passed`, `metadata_preserved`, and `evidence` fields can be
+copied into the classifier's fallback report. The classifier itself still
+does not execute or verify transforms.
+
+The independence here is algorithmic within this package, not an external
+oracle: both implementations run in the same process and use the same input
+payload. Production acceptance must additionally compare against ONNX
+Runtime or another independently versioned reference, retain per-tensor and
+end-to-end metrics, and test the generated Cmajor program on the target
+compiler/runtime.
+
+## Remaining integration boundary
+
+This package still does not parse ONNX protobufs, extract initializers or
+quantization annotations from a model, rewrite an ONNX graph, emit Cmajor,
+invoke the Cmajor compiler, or execute the generated program. The caller must
+supply correctly decoded payloads and actual capability/compiler/runtime
+evidence. A package-level transform pass is not proof of end-to-end adapter
+support.
