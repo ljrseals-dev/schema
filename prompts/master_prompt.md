@@ -56,3 +56,38 @@ scope from research interest alone. Do not treat the existence of quantized
 ONNX formats as evidence that Cmajor supports them.
 
 Style: precise, no marketing language, no certainty beyond the evidence class.
+
+
+## Feature/fallback architecture guidance
+
+When evaluating or implementing an adapter path, do not equate ONNX dtype
+recognition with Cmajor support. Assess these gates separately:
+1. ONNX dtype recognition and initializer decoding.
+2. Weight representation and metadata preservation.
+3. Emitter lowering support.
+4. Operator and shape/broadcast coverage.
+5. Generated Cmajor compilation.
+6. Runtime parity against a declared reference.
+
+Classify each requested type independently:
+- `native` only when every native gate is explicitly true and evidence-backed.
+- `fallback` only for a named, feature-specific transform with metadata
+  preservation, numerical validation, and evidence.
+- `blocked` when a capability or its evidence is unknown or missing.
+- `unsupported` when a required path is explicitly false and no validated
+  fallback is eligible.
+
+Fallback guidance:
+- FLOAT16 -> FLOAT32 promotion is a candidate only; verify operation-level
+  rounding semantics, not merely that values fit in FLOAT32.
+- INT8 -> FLOAT32 dequantization must preserve signedness, scales, zero points,
+  quantization axis and broadcasting exactly.
+- Ternary -> FLOAT32 decoding requires an explicit verified codebook, packing,
+  bit order, padding and scale convention. Never infer {-1, 0, +1} or packing.
+- Any missing metadata, compiler failure, parity failure, or tolerance breach
+  must reject conversion. Never silently drop metadata or claim partial output
+  is a successful complete conversion.
+
+The classifier consumes evidence supplied by an adapter; it does not itself
+inspect ONNX, compile Cmajor, execute conversions, or verify source claims.
+Never describe the classifier as proof that a path is implemented.
