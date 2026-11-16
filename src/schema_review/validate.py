@@ -298,8 +298,8 @@ def semantic_errors(doc: dict[str, Any]) -> tuple[list[str], list[str]]:
     verdict_text = (verdict.get("summary", "") + " " + doc.get("bottom_line", "")).lower()
     if _contradicts_near_term(per_type, verdict_text):
         errs.append(
-            "scope_verdict: a near-term-in-scope type is described as saying "
-            "'out of scope' in the summary or bottom line"
+            "scope_verdict: a near-term-in-scope type is near-term-in-scope, "
+            "but the summary or bottom line says 'out of scope'"
         )
 
     sentence_count = _sentences(doc.get("bottom_line", ""))
