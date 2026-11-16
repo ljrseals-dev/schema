@@ -225,7 +225,8 @@ def _dupes(label: str, texts: list[str], errs: list[str]) -> None:
 
 
 def _contradicts_near_term(per_type: dict[str, Any], text: str) -> bool:
-    """Detect direct type/scope associations without crossing punctuation."""
+    """Detect direct type/scope associations while respecting explicit negation."""
+    text = text.lower()
     for type_name, verdict in per_type.items():
         if verdict != "near-term-in-scope":
             continue
@@ -234,16 +235,24 @@ def _contradicts_near_term(per_type: dict[str, Any], text: str) -> bool:
             rf"\b{escaped}\b(?:\s+\w+){{0,5}}\s+out[- ]of[- ]scope\b",
             text,
         )
+        if type_then_scope and not re.search(r"\bnot\b", type_then_scope.group(0)):
+            return True
+
         scope_then_type = re.search(
             rf"\bout[- ]of[- ]scope\s+(?:for|in)\s+(?:the\s+)?\b{escaped}\b",
             text,
         )
+        if scope_then_type:
+            prefix = text[max(0, scope_then_type.start() - 32):scope_then_type.start()]
+            if not re.search(r"\bnot(?:\s+\w+){0,2}\s+$", prefix):
+                return True
+
         global_scope = re.search(
             r"\b(?:all(?:\s+three)?|quantized)\s+types?\b"
             r"(?:\s+\w+){0,5}\s+out[- ]of[- ]scope\b",
             text,
         )
-        if type_then_scope or scope_then_type or global_scope:
+        if global_scope and not re.search(r"\bnot\b", global_scope.group(0)):
             return True
     return False
 
@@ -289,8 +298,8 @@ def semantic_errors(doc: dict[str, Any]) -> tuple[list[str], list[str]]:
     verdict_text = (verdict.get("summary", "") + " " + doc.get("bottom_line", "")).lower()
     if _contradicts_near_term(per_type, verdict_text):
         errs.append(
-            "scope_verdict: a near-term-in-scope type is explicitly described as "
-            "out of scope in the summary or bottom line"
+            "scope_verdict: a near-term-in-scope type is described as saying "
+            "'out of scope' in the summary or bottom line"
         )
 
     sentence_count = _sentences(doc.get("bottom_line", ""))
