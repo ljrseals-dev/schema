@@ -1,31 +1,38 @@
-# Integration notes
+# Integration and validation notes
 
-These files add a validator, tests, CI, and a technical note to a repository
-that already has its own prompts, schema, and worked review.
+The package can be used as a dependency-free runtime validator. The optional
+`test` extra installs `jsonschema` for independent Draft-07 differential
+validation; it is not a runtime dependency.
 
-1. **Place at the repository root.** `.github/workflows/ci.yml` only runs from
-   the root. If you keep the project in a subfolder, add
-   `defaults: run: working-directory: <folder>` to the job and move the
-   workflow file to the root `.github/workflows/`.
-2. **Schema reconciliation.** The bundled schema lives at
-   `src/schema_review/data/quantized_emitter_review.schema.json`. If the
-   repository already has a review schema, either replace the bundled file with
-   it (and update the semantic rules in `validate.py` to its field names) or
-   validate against it with `python -m schema_review <review.json> --schema
-   <schema.json> --structural-only`.
-3. **Fixture.** `tests/fixtures/review_example.json` matches the bundled schema
-   only. It is not the repository's own worked review.
-4. **Independent execution and validation.** Run
-   `python scripts/independent_check.py [report.json]` to copy only the
-   `schema_review` package into a temporary directory, invoke its CLI from an
-   unrelated working directory twice, and compare the results. The harness
-   derives structural mutation expectations from the bundled schema and fails
-   if any mandatory mutant is accepted. It is deliberately limited to the
-   bundled schema and fixture; it does not independently test semantic rules
-   or establish general JSON Schema conformance.
-5. **CI artifact.** The unit-test invocation runs the harness once and writes
-   `validation_report.json` when `SCHEMA_REVIEW_VALIDATION_REPORT` is set. CI
-   uploads that report as `independent-validation-report`; it does not repeat
-   the expensive mutation sweep in a separate step.
-6. **Not yet run here:** the hosted GitHub Actions workflow. Its result must be
-   read from the Actions run; adding the workflow is not evidence that it ran.
+1. **Repository root.** The GitHub Actions workflow is at
+   `.github/workflows/ci.yml` and runs from the repository root.
+2. **Bundled schema.** The semantic rules in `src/schema_review/validate.py`
+   are specific to
+   `src/schema_review/data/quantized_emitter_review.schema.json`. For another
+   schema, pass `--schema <schema.json> --structural-only`; the semantic
+   rules are intentionally skipped because they assume the bundled fields.
+3. **Fixture.** `examples/review_example.json` is the worked review fixture.
+   `tests/fixtures/review_example.json` is kept as the test copy; tests check
+   the bundled schema against the example.
+4. **Independent execution.** Run
+   `python scripts/independent_check.py [report.json]`. The harness copies
+   only the package into a temporary directory, invokes the CLI from an
+   unrelated working directory twice, and checks deterministic output.
+5. **Differential structural oracle.** The harness checks the schema with
+   `jsonschema.Draft7Validator`, then compares the project CLI's
+   `--structural-only` result with that independent implementation for
+   schema-derived mutations. Any disagreement or accepted mandatory-invalid
+   mutation fails the run. This is limited to the bundled schema and fixture;
+   it does not prove general JSON Schema conformance.
+6. **CI report.** The unit-test invocation runs the harness once and writes
+   `validation_report.json`. GitHub Actions uploads it as the
+   `independent-validation-report` artifact. The report records environment,
+   source hashes, mutation counts, and any disagreements.
+7. **Semantic boundary.** The mutation oracle validates structural behavior,
+   not the independent correctness of semantic rules. Those rules have
+   focused regression tests but still need a separately authored semantic
+   specification/oracle. Neither layer establishes that review claims are
+   true or that cited evidence supports them.
+8. **Hosted execution.** Check the pull request's Actions run for the result.
+   A workflow definition or a previous successful run is not evidence that a
+   later commit has passed.
