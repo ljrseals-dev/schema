@@ -124,6 +124,13 @@ class StrictJsonAndCliTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "non-standard JSON"):
                 load_json(path)
 
+    def test_numeric_overflow_is_not_accepted_as_infinity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "overflow.json"
+            path.write_text('{"value": 1e9999}', encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "outside the supported finite range"):
+                load_json(path)
+
     def test_cli_duplicate_key_returns_input_error_without_traceback(self) -> None:
         env = {"PYTHONPATH": str(ROOT / "src")}
         with tempfile.TemporaryDirectory() as directory:
