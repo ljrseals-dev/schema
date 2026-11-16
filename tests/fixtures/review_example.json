@@ -1,0 +1,204 @@
+{
+  "prompt_premise_corrections": [
+    {
+      "premise": "Cmajor currently has no ternary, int8, or float16 types.",
+      "correction": "The material shows only that the emitter's getDataType whitelist excludes them and that the converter aborts on FLOAT16 and UINT8. Language-level type support is unverified.",
+      "basis": "known-source"
+    },
+    {
+      "premise": "A converter flag is distinct from an emitter change.",
+      "correction": "In this codebase onnxToCmajor.py is the emitter; the whitelist lives in the script itself.",
+      "basis": "known-source"
+    }
+  ],
+  "scope_verdict": {
+    "per_type": {
+      "ternary": "out-of-scope",
+      "int8": "out-of-scope",
+      "float16": "out-of-scope"
+    },
+    "primary_blocker": {
+      "statement": "Operator coverage: the shipped Conv processor ignores ONNX pads and has no stride argument, so all 151 DAC convolutions mis-lower regardless of weight type.",
+      "evidence_class": "known-source",
+      "source": "realm-quant notes/cmajor-research.md (source-read, author-reported)"
+    },
+    "summary": "Quantized types are currently out of scope for DAC-class graphs. Float16 is the smallest change (dtype whitelist, operator multiset otherwise unchanged) but is still blocked. Int8 additionally needs new operators, and ternary needs a new representation with no validation path."
+  },
+  "known": [
+    {
+      "statement": "Release 1.0.3209 implements sixteen processors; Mul, Sin, Pow, ConvTranspose, ArgMax, ReduceL2, ReduceSum, Shape, Expand, and ConstantOfShape are absent.",
+      "evidence_class": "known-source",
+      "source": "realm-quant notes/cmajor-research.md"
+    },
+    {
+      "statement": "onnxToCmajor.py emits onnx::operation::<OpType> for every node and does not reject unknown ops.",
+      "evidence_class": "known-source",
+      "source": "realm-quant notes/cmajor-research.md"
+    },
+    {
+      "statement": "getDataType whitelists float32, float64, int32, int64, and bool.",
+      "evidence_class": "known-source",
+      "source": "realm-quant Paper.md"
+    },
+    {
+      "statement": "The converter aborts on FLOAT16 (decoder fp16) and UINT8 (int8 decoder and encoder).",
+      "evidence_class": "known-measured",
+      "source": "realm-quant notes/cmajor-research.md"
+    },
+    {
+      "statement": "FP16 adds one Cast; INT8 adds ConvInteger, DynamicQuantizeLinear, DequantizeLinear, MatMulInteger, and Cast, none of which have Cmajor processors.",
+      "evidence_class": "known-measured",
+      "source": "realm-quant notes/cmajor-research.md"
+    },
+    {
+      "statement": "A 5.39x literal expansion was measured on codebook weights; the full-model inline figures are extrapolated.",
+      "evidence_class": "known-measured",
+      "source": "realm-quant notes/cmajor-research.md"
+    }
+  ],
+  "proposed_unmeasured": {
+    "no_implementation_assumed": true,
+    "claims": [
+      {
+        "statement": "Ternary literals would remove the literal-expansion problem.",
+        "evidence_class": "proposed-unmeasured"
+      },
+      {
+        "statement": "INT8 would give a 2-4x CPU speedup (generic claim, not measured here).",
+        "evidence_class": "proposed-unmeasured"
+      },
+      {
+        "statement": "Ternary retention figures from an external LLM pipeline do not validate Cmajor or audio codecs.",
+        "evidence_class": "proposed-unmeasured"
+      }
+    ]
+  },
+  "required_changes": {
+    "type_system": [
+      {
+        "statement": "A float16 type, or load-time promotion to float32.",
+        "applies_to": [
+          "float16"
+        ],
+        "extensibility_verified": false
+      },
+      {
+        "statement": "An int8/uint8 type with literal syntax and cast semantics.",
+        "applies_to": [
+          "int8"
+        ],
+        "extensibility_verified": false
+      },
+      {
+        "statement": "A ternary type or constrained int8 representation with scale metadata.",
+        "applies_to": [
+          "ternary"
+        ],
+        "extensibility_verified": false
+      }
+    ],
+    "emitter_lowering": [
+      {
+        "statement": "Extend getDataType and handle FLOAT16/UINT8 initializers.",
+        "applies_to": [
+          "float16",
+          "int8"
+        ],
+        "extensibility_verified": false
+      },
+      {
+        "statement": "Render literals for each new type.",
+        "applies_to": [
+          "all"
+        ],
+        "extensibility_verified": false
+      },
+      {
+        "statement": "Unpack ternary weights and apply group scales.",
+        "applies_to": [
+          "ternary"
+        ],
+        "extensibility_verified": false
+      }
+    ],
+    "operators": [
+      {
+        "statement": "ConvInteger, MatMulInteger, DynamicQuantizeLinear, DequantizeLinear, and Cast processors.",
+        "applies_to": [
+          "int8"
+        ],
+        "extensibility_verified": false
+      },
+      {
+        "statement": "Prerequisite for every type: rewrite Conv to read pads and accept strides.",
+        "applies_to": [
+          "all"
+        ],
+        "extensibility_verified": false
+      }
+    ],
+    "validation": [
+      {
+        "statement": "Codec-quality evaluation with a defined metric and reference; none exists.",
+        "applies_to": [
+          "all"
+        ],
+        "extensibility_verified": false
+      }
+    ]
+  },
+  "open_design_questions": [
+    {
+      "question": "Native quantized types, or storage-only types promoted at load?",
+      "area": "representation"
+    },
+    {
+      "question": "Ternary packing: 1.58-bit versus 2-bit.",
+      "area": "packing"
+    },
+    {
+      "question": "Scale granularity: per-tensor, per-channel, or per-group.",
+      "area": "scale-metadata"
+    },
+    {
+      "question": "Can short ternary literals emit as existing int32/float32 literals with no new type?",
+      "area": "literal-emission"
+    },
+    {
+      "question": "Which metric and reference decide codec quality?",
+      "area": "validation-methodology"
+    },
+    {
+      "question": "How can any lowering claim be checked while cmaj does not start?",
+      "area": "verification-environment"
+    }
+  ],
+  "assumptions_and_corrections": [
+    {
+      "kind": "assumption",
+      "statement": "DAC 24 kHz is representative of the codecs in scope."
+    },
+    {
+      "kind": "evidence-correction",
+      "statement": "The 1.14 GB and 487 MB inline figures are extrapolated from 5.39x, not measured."
+    },
+    {
+      "kind": "evidence-correction",
+      "statement": "'Eliminates expansion entirely' for ternary literals is unmeasured; scales add literals."
+    },
+    {
+      "kind": "unverified",
+      "statement": "All claims about Cmajor source rest on the author's notes; the Cmajor repository was not read."
+    },
+    {
+      "kind": "unverified",
+      "statement": "'ONNX Runtime Web handles every op natively' was not tested; only FP16 graphs were run."
+    }
+  ],
+  "verification_limits": [
+    "cmaj 1.0.3209 did not start in the test environment; nothing was compile-checked and no WASM was produced.",
+    "Lowering behavior is source-read only.",
+    "No codec-quality metric was evaluated for any quantized variant."
+  ],
+  "bottom_line": "Ternary weights are currently out of scope for the Cmajor emitter. They require type-system and emitter changes and sit behind an unstarted Conv rewrite. Float16 is the most plausible first step but is unmeasured inside Cmajor."
+}

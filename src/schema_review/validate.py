@@ -141,10 +141,16 @@ def semantic_errors(doc: dict[str, Any]) -> tuple[list[str], list[str]]:
     return errs, warns
 
 
-def validate_review(doc: dict[str, Any], schema: dict[str, Any] | None = None) -> tuple[list[str], list[str]]:
+def validate_review(
+    doc: dict[str, Any],
+    schema: dict[str, Any] | None = None,
+    structural_only: bool = False,
+) -> tuple[list[str], list[str]]:
+    """Validate doc. With structural_only, apply only the schema checks (use this
+    for any schema other than the bundled one; the semantic rules assume its fields)."""
     schema = schema or load_schema()
     errs: list[str] = []
     _check(doc, schema, schema, "$", errs)
-    if errs:
+    if errs or structural_only:
         return errs, []
     return semantic_errors(doc)

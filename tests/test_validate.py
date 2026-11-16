@@ -6,7 +6,7 @@ from pathlib import Path
 from schema_review import load_schema, validate_review
 
 ROOT = Path(__file__).resolve().parents[1]
-EXAMPLE = json.loads((ROOT / "examples" / "review_example.json").read_text(encoding="utf-8"))
+EXAMPLE = json.loads((ROOT / "tests" / "fixtures" / "review_example.json").read_text(encoding="utf-8"))
 
 
 class ValidateTests(unittest.TestCase):
@@ -95,6 +95,40 @@ class ValidateTests(unittest.TestCase):
         from schema_review.validate import DEFAULT_SCHEMA
         self.assertEqual(DEFAULT_SCHEMA.parent.parent.name, "schema_review")
         self.assertTrue(DEFAULT_SCHEMA.exists())
+
+
+    def test_structural_only_skips_semantic_rules(self):
+        doc = copy.deepcopy(EXAMPLE)
+        doc["bottom_line"] = "One sentence only."
+        self.assertTrue(validate_review(doc, load_schema())[0])
+        self.assertEqual(validate_review(doc, load_schema(), structural_only=True)[0], [])
+
+    def test_structural_only_still_catches_shape_errors(self):
+        doc = copy.deepcopy(EXAMPLE)
+        doc.pop("known")
+        self.assertTrue(validate_review(doc, load_schema(), structural_only=True)[0])
+
+    def test_cli_exit_codes(self):
+        import subprocess, sys, tempfile, os
+        env = {**os.environ, "PYTHONPATH": str(ROOT / "src")}
+        good = ROOT / "tests" / "fixtures" / "review_example.json"
+        r = subprocess.run([sys.executable, "-m", "schema_review", str(good)], env=env, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as fh:
+            fh.write("{}")
+        r = subprocess.run([sys.executable, "-m", "schema_review", fh.name], env=env, capture_output=True, text=True)
+        os.unlink(fh.name)
+        self.assertEqual(r.returncode, 1)
+
+    def test_cli_malformed_json_is_an_error_not_a_traceback(self):
+        import subprocess, sys, tempfile, os
+        env = {**os.environ, "PYTHONPATH": str(ROOT / "src")}
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as fh:
+            fh.write("{not json")
+        r = subprocess.run([sys.executable, "-m", "schema_review", fh.name], env=env, capture_output=True, text=True)
+        os.unlink(fh.name)
+        self.assertEqual(r.returncode, 2)
+        self.assertNotIn("Traceback", r.stderr)
 
 
 if __name__ == "__main__":

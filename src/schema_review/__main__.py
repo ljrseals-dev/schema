@@ -9,10 +9,20 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="schema_review", description="Validate a review JSON file.")
     p.add_argument("review", help="path to a review JSON file")
     p.add_argument("--schema", help="path to a schema file (default: bundled)")
+    p.add_argument(
+        "--structural-only",
+        action="store_true",
+        help="skip semantic rules; use with any schema other than the bundled one",
+    )
     args = p.parse_args(argv)
-    with open(args.review, encoding="utf-8") as fh:
-        doc = json.load(fh)
-    errs, warns = validate_review(doc, load_schema(args.schema))
+    try:
+        with open(args.review, encoding="utf-8") as fh:
+            doc = json.load(fh)
+        schema = load_schema(args.schema)
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"error: cannot read input: {exc}", file=sys.stderr)
+        return 2
+    errs, warns = validate_review(doc, schema, structural_only=args.structural_only)
     for w in warns:
         print(f"warning: {w}", file=sys.stderr)
     for e in errs:
