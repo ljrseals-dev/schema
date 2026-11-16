@@ -50,16 +50,7 @@ def _finite_nonnegative(value: Any) -> bool:
 
 
 def classify_feature(feature: str, report: dict[str, Any]) -> dict[str, Any]:
-    """Return a deterministic native/fallback/blocked/unsupported decision.
-
-    Required report shape:
-      {"capabilities": {gate: bool | null, ...}, "evidence": {gate: "source"},
-       "fallback": {...}}
-
-    Missing/unknown gate results are blocked, not treated as false or true.
-    Explicit false capability results may be bypassed only by an independently
-    validated fallback satisfying every fallback guard.
-    """
+    """Return a deterministic native/fallback/blocked/unsupported decision."""
     if feature not in FEATURES:
         raise ValueError(f"unsupported feature name: {feature!r}")
     if not isinstance(report, dict):
@@ -93,7 +84,7 @@ def classify_feature(feature: str, report: dict[str, Any]) -> dict[str, Any]:
         fallback_evidence = fallback.get("evidence")
         fallback_evidence_ok = (
             isinstance(fallback_evidence, list)
-            and len(fallback_evidence) > 0
+            and bool(fallback_evidence)
             and all(isinstance(item, str) and item.strip() for item in fallback_evidence)
         )
         error_ok = (
@@ -101,7 +92,10 @@ def classify_feature(feature: str, report: dict[str, Any]) -> dict[str, Any]:
             and _finite_nonnegative(fallback.get("measured_error"))
             and fallback["measured_error"] <= fallback["error_tolerance"]
         )
-        fallback_gates_ok = all(capabilities.get(gate) is True for gate in FALLBACK_GATES)
+        fallback_gates_ok = (
+            all(capabilities.get(gate) is True for gate in FALLBACK_GATES)
+            and _evidence_complete(evidence, FALLBACK_GATES)
+        )
         guards_ok = (
             transform_ok
             and ternary_encoding_ok
@@ -149,12 +143,14 @@ def classify_feature(feature: str, report: dict[str, Any]) -> dict[str, Any]:
 
 
 def classify_model(report: dict[str, Any]) -> dict[str, Any]:
-    """Classify each requested feature independently; no all-or-nothing guessing."""
+    """Classify each requested feature independently; readiness is all-or-nothing."""
     if not isinstance(report, dict):
         raise TypeError("report must be an object")
     requested = report.get("requested_features")
     if not isinstance(requested, list) or not requested:
         raise ValueError("requested_features must be a non-empty list")
+    if any(not isinstance(feature, str) for feature in requested):
+        raise ValueError("requested_features entries must be strings")
     if len(set(requested)) != len(requested):
         raise ValueError("requested_features contains duplicates")
     feature_reports = report.get("features")
