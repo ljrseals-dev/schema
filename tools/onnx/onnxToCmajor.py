@@ -670,10 +670,13 @@ def _promote_float16_tensors(model):
 
 def prepare_quantized_model(model):
     """Apply only explicit, supported fallback rewrites; reject ambiguous tensors."""
+    # DequantizeLinear is admitted only as an initializer-folding pattern;
+    # _dequantize_int8_initializers removes it before ordinary code generation.
+    allowed_ops = set(nodeEndpointNames) | {"DequantizeLinear"}
     unsupported_nodes = [
         f"{node.name or '<unnamed>'}:{node.domain or 'ai.onnx'}::{node.op_type}"
         for node in model.graph.node
-        if node.domain not in ("", "ai.onnx") or node.op_type not in nodeEndpointNames
+        if node.domain not in ("", "ai.onnx") or node.op_type not in allowed_ops
     ]
     if unsupported_nodes:
         raise ValueError("unsupported ONNX operator(s): " + ", ".join(unsupported_nodes))
