@@ -86,8 +86,12 @@ An `extensibility_verified: true` value produces a warning for human review.
   implementation over the bundled fixture and generated structural mutations.
   This is differential coverage, not exhaustive conformance testing.
 - The semantic scope-consistency and sentence-count checks remain heuristics.
-- The feature classifier tests decision logic, not actual ONNX decoding,
-  Cmajor compilation, tensor conversion, or runtime parity.
+- The feature classifier tests decision logic. The fallback runtime executes
+  FLOAT16 promotion, INT8 dequantization, and guarded ternary decoding over
+  caller-decoded payloads, then compares each transform with a separate
+  standard-library reference implementation. This is not an external oracle
+  and does not replace ONNX Runtime, Cmajor compilation, or target runtime
+  parity testing.
 - The validator checks structure and selected consistency rules, not whether
   cited sources actually support claims. Source verification remains a human
   or separate evidence-retrieval task.
@@ -101,3 +105,14 @@ See [INTEGRATION.md](INTEGRATION.md) for existing validator execution boundaries
 ## License
 
 MIT. See `LICENSE`.
+
+
+## Executable fallback transforms
+
+The package exposes `schema_review.execute_and_validate` for decoded
+FLOAT16, INT8, and explicitly specified two-bit ternary initializer payloads.
+It returns transformed values and independent-reference error metrics; invalid
+shapes, quantization parameters, ternary codebooks, reserved symbols, padding,
+and non-finite FLOAT16 values fail closed. See
+[FEATURE_FALLBACK_MODEL.md](docs/FEATURE_FALLBACK_MODEL.md) for payload
+contracts and the remaining ONNX/Cmajor integration boundary.
