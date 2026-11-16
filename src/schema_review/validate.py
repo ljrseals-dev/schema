@@ -326,7 +326,8 @@ def validate_review(
     structural_only: bool = False,
 ) -> tuple[list[str], list[str]]:
     """Validate a review; structural_only skips bundled-schema semantic rules."""
-    schema = schema or load_schema()
+    if schema is None:
+        schema = load_schema()
     errs: list[str] = []
     _check(doc, schema, schema, "$", errs)
     if errs or structural_only:
