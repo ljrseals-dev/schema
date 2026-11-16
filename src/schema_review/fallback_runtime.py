@@ -265,6 +265,8 @@ def execute_and_validate(feature: str, payload: Any, metadata: dict[str, Any],
         "shape": payload.get("shape") if isinstance(payload, dict) else None,
         "metadata_preserved": preserved,
         "validation_passed": passed,
+        "measured_error": max_abs,
+        "error_tolerance": tolerance,
         "metrics": {"max_absolute_error": max_abs, "max_relative_error": max_rel,
                     "reference_max_absolute_value": max_ref, "tolerance": tolerance},
         "evidence": [
