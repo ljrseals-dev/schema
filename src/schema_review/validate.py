@@ -25,7 +25,7 @@ _TYPES = {
     "null": type(None),
 }
 KNOWN = {"known-source", "known-measured", "known-documented"}
-BLOCKER_OK = KNOWN | {"unverified", "assumption"}
+BLOCKER_OK = KNOWN | {"proposed-unmeasured", "unverified", "assumption"}
 _ABBR = (
     "e.g.", "i.e.", "etc.", "vs.", "cf.", "Fig.", "Sec.", "No.",
     "Dr.", "Mr.", "Mrs.", "Ms.", "Prof.", "U.S.", "U.K.",
