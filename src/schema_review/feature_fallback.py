@@ -21,6 +21,7 @@ NATIVE_GATES = (
     "runtime_parity_verified",
 )
 FALLBACK_GATES = (
+    "dtype_recognized",
     "initializer_decoded",
     "operator_coverage_verified",
     "codegen_compiles",
