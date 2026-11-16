@@ -100,7 +100,7 @@ def getDataType (dataType: int):
     if dataType in dataTypes:
         return dataTypes[dataType]
 
-    assert (False)
+    raise ValueError(f"unsupported ONNX tensor data type: {dataType}")
 
 def createCmajArray (dimensions, array, elementSuffix):
 
@@ -535,6 +535,11 @@ def _dequantize_int8_initializers(model):
             raise ValueError(f"{node.name or 'DequantizeLinear'}: data input must be an initializer")
         if scale_name not in initializer_by_name:
             raise ValueError(f"{node.name or 'DequantizeLinear'}: scale must be an initializer")
+        graph_input_names = {item.name for item in graph.input}
+        if scale_name in graph_input_names:
+            raise ValueError(f"{scale_name}: dynamic scale graph inputs are not supported")
+        if zero_name is not None and zero_name in graph_input_names:
+            raise ValueError(f"{zero_name}: dynamic zero-point graph inputs are not supported")
         data_tensor = initializer_by_name[data_name]
         if data_tensor.data_type != onnx.TensorProto.INT8:
             raise ValueError(f"{data_name}: this fallback supports signed INT8 data only")
@@ -557,10 +562,11 @@ def _dequantize_int8_initializers(model):
             axis_attr = next((a for a in node.attribute if a.name == "axis"), None)
             axis = int(axis_attr.i) if axis_attr is not None else 1
         shape = _tensor_shape(data_tensor)
+        transform_shape = shape if shape else [1]
         try:
             values = dequantize_int8(
                 numpy_helper.to_array(data_tensor).reshape(-1).tolist(),
-                shape, scale=scale_array.reshape(-1).tolist()[0]
+                transform_shape, scale=scale_array.reshape(-1).tolist()[0]
                     if scale_array.size == 1 else scale_array.reshape(-1).tolist(),
                 zero_point=zero_array.reshape(-1).tolist()[0]
                     if zero_array.size == 1 else zero_array.reshape(-1).tolist(),
@@ -575,6 +581,13 @@ def _dequantize_int8_initializers(model):
 
     # A quantized initializer may not also feed an ordinary operator directly.
     dq_data_names = {plan[1] for plan in plans}
+    if len(dq_data_names) != len(plans):
+        raise ValueError("an INT8 initializer may have only one DequantizeLinear consumer")
+    graph_input_names = {item.name for item in graph.input}
+    graph_output_names = {item.name for item in graph.output}
+    for data_name in dq_data_names:
+        if data_name in graph_input_names or data_name in graph_output_names:
+            raise ValueError(f"{data_name}: quantized graph inputs/outputs require an explicit runtime adapter")
     for node in graph.node:
         if node.op_type == "DequantizeLinear":
             continue
@@ -597,6 +610,7 @@ def _dequantize_int8_initializers(model):
     for value_info in list(graph.value_info):
         if value_info.name in aliases:
             value_info.name = aliases[value_info.name]
+        if value_info.name in dq_data_names:
             value_info.type.tensor_type.elem_type = onnx.TensorProto.FLOAT
 
     for _, data_name, _, values, shape in plans:
@@ -623,8 +637,9 @@ def _promote_float16_tensors(model):
             array = numpy_helper.to_array(tensor)
             words = array.view(np.uint16).reshape(-1).tolist()
             shape = _tensor_shape(tensor)
+            transform_shape = shape if shape else [1]
             try:
-                values = promote_float16(words, shape)
+                values = promote_float16(words, transform_shape)
             except (FallbackError, TypeError, ValueError) as exc:
                 raise ValueError(f"{tensor.name}: FLOAT16 promotion rejected: {exc}") from exc
             _replace_initializer(model.graph, tensor.name, values, shape)
@@ -635,8 +650,9 @@ def _promote_float16_tensors(model):
                 array = numpy_helper.to_array(attribute.t)
                 words = array.view(np.uint16).reshape(-1).tolist()
                 shape = _tensor_shape(attribute.t)
+                transform_shape = shape if shape else [1]
                 try:
-                    values = promote_float16(words, shape)
+                    values = promote_float16(words, transform_shape)
                 except (FallbackError, TypeError, ValueError) as exc:
                     raise ValueError(f"{node.name}: FLOAT16 Constant promotion rejected: {exc}") from exc
                 replacement = numpy_helper.from_array(
@@ -645,14 +661,32 @@ def _promote_float16_tensors(model):
                 )
                 attribute.t.CopyFrom(replacement)
 
-    for value_info in list(model.graph.input) + list(model.graph.output) + list(model.graph.value_info):
-        tensor_type = value_info.type.tensor_type
-        if tensor_type.elem_type == onnx.TensorProto.FLOAT16:
-            tensor_type.elem_type = onnx.TensorProto.FLOAT
+    # A graph boundary needs an explicit input/output cast, not just a changed
+    # type declaration. This emitter has no such adapter, so reject it.
+    for value_info in list(model.graph.input) + list(model.graph.output):
+        if value_info.type.tensor_type.elem_type == onnx.TensorProto.FLOAT16:
+            raise ValueError(
+                f"{value_info.name}: FLOAT16 graph I/O requires an explicit runtime cast adapter"
+            )
+    for value_info in model.graph.value_info:
+        if value_info.type.tensor_type.elem_type == onnx.TensorProto.FLOAT16:
+            value_info.type.tensor_type.elem_type = onnx.TensorProto.FLOAT
 
 
 def prepare_quantized_model(model):
     """Apply only explicit, supported fallback rewrites; reject ambiguous tensors."""
+    if model.graph.sparse_initializer:
+        raise ValueError("sparse initializers are not supported by this emitter")
+    # DequantizeLinear is admitted only as an initializer-folding pattern;
+    # _dequantize_int8_initializers removes it before ordinary code generation.
+    allowed_ops = set(nodeEndpointNames) | {"DequantizeLinear"}
+    unsupported_nodes = [
+        f"{node.name or '<unnamed>'}:{node.domain or 'ai.onnx'}::{node.op_type}"
+        for node in model.graph.node
+        if node.domain not in ("", "ai.onnx") or node.op_type not in allowed_ops
+    ]
+    if unsupported_nodes:
+        raise ValueError("unsupported ONNX operator(s): " + ", ".join(unsupported_nodes))
     _decode_ternary_initializers(model)
     _dequantize_int8_initializers(model)
     _promote_float16_tensors(model)
